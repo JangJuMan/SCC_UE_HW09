@@ -42,6 +42,22 @@ void ANBGameModeBase::BeginPlay()
 	SecretNumberString = GenerateSecretNumber();
 }
 
+void ANBGameModeBase::Logout(AController* Exiting)
+{
+	Super::Logout(Exiting);
+
+	ANBPlayerController* NBPlayerController = Cast<ANBPlayerController>(Exiting);
+	if (IsValid(NBPlayerController))
+	{
+		if (CurrentTurnPlayer == NBPlayerController)	// 게임 도중 나가면 턴 강제종료
+		{
+			EndTurn();
+		}
+		AllPlayerControllers.Remove(NBPlayerController);		
+	}
+}
+
+
 FString ANBGameModeBase::GenerateSecretNumber()
 {
 	TArray<int32> Numbers;
@@ -177,7 +193,7 @@ void ANBGameModeBase::PrintChatMessageString(ANBPlayerController* InChattingPlay
 				NBPlayerController->ClientRPCPrintChatMessageString(CombinedMessageString);
 
 				int32 StrikeCount = FCString::Atoi(*JudgeResultString.Left(1));
-				JudgeGame(NBPlayerController, StrikeCount);
+				JudgeGame(InChattingPlayerController, StrikeCount);
 			}
 		}
 		EndTurn();
@@ -272,6 +288,11 @@ void ANBGameModeBase::BeginTurn(ANBPlayerController* NewTurnPlayer)
 		ANBPlayerState* NBPS = NewTurnPlayer->GetPlayerState<ANBPlayerState>();
 		if (IsValid(NBPS))
 		{
+			if (NBPS->CurrentGuessCount >= NBPS->MaxGuessCount)	// 외치기 횟수를 초과한 경우 턴 생략
+			{
+				EndTurn();
+				return;
+			}
 			NBPS->TimeRemainingForTurn = TurnTimeLimit;
 		}
 		
@@ -291,28 +312,41 @@ void ANBGameModeBase::BeginTurn(ANBPlayerController* NewTurnPlayer)
 
 void ANBGameModeBase::EndTurn()
 {
-	// IncreaseGuessCount(CurrentTurnPlayer);
-	
 	GetWorldTimerManager().ClearTimer(TurnTimerHandle);
 
 	int32 CurrentIndex = AllPlayerControllers.Find(CurrentTurnPlayer);
+	if (CurrentIndex == INDEX_NONE)
+	{
+		if (AllPlayerControllers.Num() > 0)
+		{
+			CurrentIndex = 0;
+		}
+		else
+		{
+			return;
+		}
+	}
+	
 	int32 NextIndex = (CurrentIndex + 1) % AllPlayerControllers.Num();
-
-	UE_LOG(LogTemp, Warning, TEXT("bIsGameOver : %d"), bIsGameOver);
+	
 	if (bIsGameOver)
 	{
-		GetWorld()->GetTimerManager().SetTimer(TurnTimerHandle, FTimerDelegate::CreateLambda([this, NextIndex]()
-	   {
+		GetWorldTimerManager().ClearTimer(ResetGameTimerHandle);
+		GetWorld()->GetTimerManager().SetTimer(ResetGameTimerHandle, FTimerDelegate::CreateLambda([this, NextIndex]()
+		{
 			ResetGame();
-		   if (AllPlayerControllers.IsValidIndex(NextIndex))
-		   {
-			   BeginTurn(AllPlayerControllers[NextIndex]);
-		   }
-	   }), 5.0f, false);
+			if (AllPlayerControllers.IsValidIndex(NextIndex))
+			{
+				BeginTurn(AllPlayerControllers[NextIndex]);
+			}
+		}), 5.0f, false);
 	}
 	else
 	{
-		BeginTurn(AllPlayerControllers[NextIndex]);
+		if (AllPlayerControllers.IsValidIndex(NextIndex))
+		{
+			BeginTurn(AllPlayerControllers[NextIndex]);
+		}
 	}
 }
 

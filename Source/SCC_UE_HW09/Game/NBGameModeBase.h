@@ -17,6 +17,7 @@ class SCC_UE_HW09_API ANBGameModeBase : public AGameModeBase
 public:
 	virtual void OnPostLogin(AController* NewPlayer) override;
 	virtual void BeginPlay() override;
+	virtual void Logout(AController* Exiting) override;
 
 	FString GenerateSecretNumber();
 	bool IsGuessNumberString(const FString& InNumberString);
@@ -33,11 +34,14 @@ public:
 
 protected:
 	FString SecretNumberString;
+	UPROPERTY()
 	TArray<TObjectPtr<ANBPlayerController>> AllPlayerControllers;
 
 	// ADD : 턴 제어, 시간 관리
+	UPROPERTY()
 	TObjectPtr<ANBPlayerController> CurrentTurnPlayer;
 	FTimerHandle TurnTimerHandle;
+	FTimerHandle ResetGameTimerHandle;
 	int32 TurnTimeLimit = 15;
 
 	bool bIsGameOver = false;
